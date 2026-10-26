@@ -13,7 +13,8 @@ Interactive layout calculator for the **IKEA SKADIS Modular Pegboard 3.0** — a
 - **Parts catalog** — every part with exact Bambu Studio plate number
 - **Print list** — complete bill of materials, auto-calculated for your board size
 - **Interactive highlights** — hover a part in the list to highlight it on the board, and vice versa
-- 🆕 **Mount exclusions** *(added 2026-04-11)* — skip individual mount points, whole rows, or whole columns (e.g. when a wire runs behind that part of the wall)
+- 🆕 **Manual mount points** — place your own mount points anywhere on the grid, or remove auto ones
+- **Mount exclusions** *(added 2026-04-11)* — skip individual mount points, whole rows, or whole columns (e.g. when a wire runs behind that part of the wall)
 
 ## How to use
 
@@ -83,11 +84,15 @@ The system uses four different border module types — they are not interchangea
 
 ## Wall mounting
 
-### Mount exclusions 🆕
+### Manual mount points 🆕
 
-> **New in 2026-04-11** — skip mount points where you can't anchor to the wall (e.g. hidden wires or pipes).
+Pick `Manual` in the *Mount points* panel and click any grid intersection on the front view: an empty spot gets a new mount point, an existing one (auto or yours) is removed. A dashed ring previews where the click will snap; positions one cell from a board edge can't hold a bracket and are ignored. Your points are marked with an orange ring, listed as chips in the sidebar, and are counted in the print list and the rear view. They also stay active inside an excluded column or row.
 
-Pick a mode (`Column` / `Row` / `Point`) in the sidebar and click a mount point on the front view to toggle it. Click an excluded point again to bring it back. The selected items appear as chips below the mode buttons; press *Clear* to reset everything. Exclusions are persisted in `localStorage` and reset automatically when the board size changes.
+### Mount exclusions
+
+> **Added 2026-04-11** — skip mount points where you can't anchor to the wall (e.g. hidden wires or pipes).
+
+Pick a mode (`Column` / `Row` / `Point`) in the sidebar and click a mount point on the front view to toggle it. Click an excluded point again to bring it back. The selected items appear as chips below the mode buttons; press *Clear* to reset everything (including manual points). Exclusions and manual points are persisted in `localStorage` and reset automatically when the board size changes.
 
 ### Mount parts
 
