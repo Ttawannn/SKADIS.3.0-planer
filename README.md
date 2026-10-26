@@ -2,7 +2,7 @@
 
 Interactive layout calculator for the **IKEA SKADIS Modular Pegboard 3.0** — a 3D-printable modular pegboard system by [AdamKozakGrafika](https://makerworld.com/ru/models/2572477-ikea-skadis-modular-pegboard-3-0).
 
-🔗 **[Open Planner →](https://deart2k.github.io/SKADIS.3.0-planer/)**
+🔗 **[Open Planner →](https://ttawannn.github.io/SKADIS.3.0-planer/)**
 
 ---
 
