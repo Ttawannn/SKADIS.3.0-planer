@@ -14,6 +14,7 @@ Interactive layout calculator for the **IKEA SKADIS Modular Pegboard 3.0** — a
 - **Print list** — complete bill of materials, auto-calculated for your board size
 - **Interactive highlights** — hover a part in the list to highlight it on the board, and vice versa
 - 🆕 **Manual mount points** — place your own mount points anywhere on the grid, or remove auto ones
+- 🆕 **Connector mode** — connectors at module corners only, or at every 40mm point along shared edges for a stiffer board
 - **Mount exclusions** *(added 2026-04-11)* — skip individual mount points, whole rows, or whole columns (e.g. when a wire runs behind that part of the wall)
 
 ## How to use
@@ -21,10 +22,11 @@ Interactive layout calculator for the **IKEA SKADIS Modular Pegboard 3.0** — a
 1. Choose **print bed variant** — Mini, Standard, or XL (see below)
 2. Set board **width** and **height** using the sliders (in 40mm cells)
 3. Adjust **mount density** — how frequently the board is anchored to the wall
-4. Switch between **Board layout**, **Wall mounting**, and **Parts catalog** tabs
-5. Use the **Print list** in the sidebar as your shopping/printing checklist
-6. Toggle **RU / EN** in the top-right corner to switch language
-7. Toggle **☀ / ☾** to switch between dark and light themes
+4. Pick the **connector mode** — *Corners only* (where module corners meet) or *All points* (every socket: also each 40mm along shared edges, incl. T-junctions; stiffer, but several times more connectors). Every module has a connector socket at each 40mm grid point of its inner-facing edges; border modules have no sockets on the board's outer edge, so no connectors go there. Bracket cells don't need regular connectors either — each distance connector (pl. 05–07) has connector blocks built in at the bracket's inner corners.
+5. Switch between **Board layout**, **Wall mounting**, and **Parts catalog** tabs
+6. Use the **Print list** in the sidebar as your shopping/printing checklist
+7. Toggle **RU / EN** in the top-right corner to switch language
+8. Toggle **☀ / ☾** to switch between dark and light themes
 
 ## Print bed variants
 
