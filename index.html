@@ -158,6 +158,7 @@ canvas{display:block}
     <div style="font-size:11px;color:var(--t3);line-height:1.55;margin-bottom:6px" data-i18n="exclHint">Pick a mode, then click a mount point on the front view to toggle.</div>
     <div class="var-seg" style="margin-bottom:8px">
       <button class="var-btn"    id="em-off"  onclick="setExclMode('off')" data-i18n="emOff">Off</button>
+      <button class="var-btn"    id="em-man"  onclick="setExclMode('man')" data-i18n="emMan">Manual</button>
       <button class="var-btn"    id="em-col"  onclick="setExclMode('col')" data-i18n="emCol">Column</button>
       <button class="var-btn"    id="em-row"  onclick="setExclMode('row')" data-i18n="emRow">Row</button>
       <button class="var-btn"    id="em-pt"   onclick="setExclMode('pt')"  data-i18n="emPt">Point</button>
@@ -256,10 +257,11 @@ const I18N = {
     catMountH:'Mounting kits — mounting.3mf · 7 plates',
     catMountNote:`Each mount point = <b>2 parts</b>:<br>🔲 <b>Bracket</b> (pl. 01–04) — replaces module at mount point, has screw hole<br>🔲 <b>Distance connector</b> (pl. 05–07) — creates ~20mm wall gap, screw goes through it`,
     varTLBL:'TL+BL', varTRBR:'TR+BR',
-    excl:'Mount exclusions', exclClear:'clear',
-    exclHint:'Pick a mode, then click a mount point on the front view to toggle. Useful when wires or pipes hide in the wall.',
-    emOff:'Off', emCol:'Column', emRow:'Row', emPt:'Point',
-    exclEmpty:'No exclusions. All mount points active.',
+    excl:'Mount points', exclClear:'clear',
+    exclHint:'Pick a mode, then click on the front view. Manual: click any grid intersection to add or remove a mount there. Column / Row / Point: skip auto mount points — useful when wires or pipes hide in the wall.',
+    emOff:'Off', emMan:'Manual', emCol:'Column', emRow:'Row', emPt:'Point',
+    exclEmpty:'No changes. All auto mount points active.',
+    exclAdded:'Added points (X,Y mm)',
     exclCols:'Excluded columns (X)', exclRows:'Excluded rows (Y)', exclPts:'Excluded points (X,Y mm)',
     exclWarn:n=>`⚠ Large gaps between mount points (up to ${n}mm). Risk of board sag — consider increasing mount density.`,
   },
@@ -291,10 +293,11 @@ const I18N = {
     catMountH:'Монтажные комплекты — mounting.3mf · 7 пластин',
     catMountNote:`Каждая точка крепления = <b>2 детали</b>:<br>🔲 <b>Кронштейн</b> (пл. 01–04) — заменяет модуль в точке крепления, имеет отверстие под шуруп<br>🔲 <b>Дистанционный коннектор</b> (пл. 05–07) — создаёт зазор ~20мм от стены, через него шуруп`,
     varTLBL:'TL+BL', varTRBR:'TR+BR',
-    excl:'Запреты крепления', exclClear:'сброс',
-    exclHint:'Выберите режим и кликайте по точкам крепления на виде спереди. Полезно когда в стене скрыта проводка или трубы.',
-    emOff:'Выкл', emCol:'Колонка', emRow:'Ряд', emPt:'Точка',
-    exclEmpty:'Нет исключений. Все точки крепления активны.',
+    excl:'Точки крепления', exclClear:'сброс',
+    exclHint:'Выберите режим и кликайте на виде спереди. Вручную: клик по любому пересечению сетки добавляет или убирает крепление. Колонка / Ряд / Точка: исключают авто-точки — полезно когда в стене скрыта проводка или трубы.',
+    emOff:'Выкл', emMan:'Вручную', emCol:'Колонка', emRow:'Ряд', emPt:'Точка',
+    exclEmpty:'Без изменений. Все авто-точки крепления активны.',
+    exclAdded:'Добавленные точки (X,Y мм)',
     exclCols:'Исключённые колонки (X)', exclRows:'Исключённые ряды (Y)', exclPts:'Исключённые точки (X,Y мм)',
     exclWarn:n=>`⚠ Большие пролёты между точками крепления (до ${n}мм). Риск провисания — увеличьте плотность крепления.`,
   }
@@ -403,7 +406,7 @@ function setVariant(key) {
 }
 
 function resetExclAndGo() {
-  EXCL.x.clear(); EXCL.y.clear(); EXCL.p.clear();
+  EXCL.x.clear(); EXCL.y.clear(); EXCL.p.clear(); ADD.clear();
   saveExclusions();
   go();
 }
@@ -538,11 +541,14 @@ let G = null; // global state
 let HK = null;  // board highlight key
 let MHK = null; // mount highlight key
 let EXCL = {x:new Set(), y:new Set(), p:new Set()}; // excluded mount columns / rows / individual points "x,y"
-let EXCL_MODE = 'off'; // 'off' | 'col' | 'row' | 'pt'
+let ADD = new Set(); // user-placed mount points "x,y" — always active, override exclusions
+let EXCL_MODE = 'off'; // 'off' | 'man' | 'col' | 'row' | 'pt'
+let HOVER_PT = null; // snapped grid position under cursor in 'man' mode
 
 function setExclMode(m) {
   EXCL_MODE = m;
-  ['off','col','row','pt'].forEach(k => {
+  HOVER_PT = null;
+  ['off','man','col','row','pt'].forEach(k => {
     const el = document.getElementById('em-'+k);
     if (el) el.classList.toggle('on', k === m);
   });
@@ -552,12 +558,13 @@ function setExclMode(m) {
 }
 
 function clearExclusions() {
-  EXCL.x.clear(); EXCL.y.clear(); EXCL.p.clear();
+  EXCL.x.clear(); EXCL.y.clear(); EXCL.p.clear(); ADD.clear();
   saveExclusions();
   go();
 }
 function saveExclusions() {
   localStorage.setItem('skadis-excl', JSON.stringify({x:[...EXCL.x], y:[...EXCL.y], p:[...EXCL.p]}));
+  localStorage.setItem('skadis-add', JSON.stringify([...ADD]));
 }
 function loadExclusions() {
   try {
@@ -566,10 +573,13 @@ function loadExclusions() {
     EXCL.y = new Set(s.y || []);
     EXCL.p = new Set(s.p || []);
   } catch(e) { EXCL.x = new Set(); EXCL.y = new Set(); EXCL.p = new Set(); }
+  try { ADD = new Set(JSON.parse(localStorage.getItem('skadis-add') || '[]')); }
+  catch(e) { ADD = new Set(); }
 }
 function removeExclX(v){ EXCL.x.delete(v); saveExclusions(); go(); }
 function removeExclY(v){ EXCL.y.delete(v); saveExclusions(); go(); }
 function removeExclP(k){ EXCL.p.delete(k); saveExclusions(); go(); }
+function removeAdd(k){ ADD.delete(k); saveExclusions(); go(); }
 
 function redrawBoard() {
   if (!G) return;
@@ -608,26 +618,40 @@ function computeMountPts(wC, hC, maxH, maxV) {
     if (!xSet.has(px) || !ySet.has(py)) EXCL.p.delete(k);
   }
   const pts = [];
+  const seen = new Set();
   for (const x of xPts) for (const y of yPts) {
     if (EXCL.x.has(x) || EXCL.y.has(y) || EXCL.p.has(`${x},${y}`)) continue;
-    // Skip "dead" positions one cell from a board corner — the row/col one cell
-    // away from the edge is occupied by topbot/side border modules and can't
-    // host an additional mount cell. Without this filter pickBounds may pick
-    // y=hC-1 or x=wC-1 (especially with MAX=6 / MAX=8 sets) which produces a
-    // phantom row of mid-mounts overlapping the border row.
-    const oL=x===0,oR=x===wC,oT=y===0,oB=y===hC;
-    const isCorner=(oL||oR)&&(oT||oB);
-    const isEdge=!isCorner&&(oL||oR||oT||oB);
-    if (!isCorner) {
-      if (oL||oR) { if (y === 1 || y === hC-1) continue; }
-      else if (oT||oB) { if (x === 1 || x === wC-1) continue; }
-      else if (x === 1 || x === wC-1 || y === 1 || y === hC-1) continue;
-    }
-    const dir=isEdge?(oT||oB?'topbot':'side'):null;
-    const key=isCorner?'corner':isEdge?dir:'mid';
+    const key = mountKeyAt(x, y, wC, hC);
+    if (!key) continue;
     pts.push({x,y,key});
+    seen.add(`${x},${y}`);
+  }
+  // User-placed points: drop ones that no longer fit the board, skip duplicates of auto points
+  for (const k of [...ADD]) {
+    const [x,y] = k.split(',').map(Number);
+    const key = mountKeyAt(x, y, wC, hC);
+    if (!key) { ADD.delete(k); continue; }
+    if (seen.has(k)) continue;
+    pts.push({x,y,key,custom:true});
+    seen.add(k);
   }
   return {pts, xPts, yPts};
+}
+
+// Mount type at grid intersection (x,y), or null if no bracket can sit there.
+// Skips "dead" positions one cell from a board corner — the row/col one cell
+// away from the edge is occupied by topbot/side border modules and can't
+// host an additional mount cell. Without this filter pickBounds may pick
+// y=hC-1 or x=wC-1 (especially with MAX=6 / MAX=8 sets) which produces a
+// phantom row of mid-mounts overlapping the border row.
+function mountKeyAt(x, y, wC, hC) {
+  if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || x > wC || y < 0 || y > hC) return null;
+  const oL=x===0,oR=x===wC,oT=y===0,oB=y===hC;
+  if ((oL||oR)&&(oT||oB)) return 'corner';
+  if (oL||oR) return (y === 1 || y === hC-1) ? null : 'side';
+  if (oT||oB) return (x === 1 || x === wC-1) ? null : 'topbot';
+  if (x === 1 || x === wC-1 || y === 1 || y === hC-1) return null;
+  return 'mid';
 }
 
 function allBounds(total, step) {
@@ -724,13 +748,15 @@ function computeLayout(wC, hC, pts) {
 
   // ── CENTER — mid board mount (пл.04) OR standard module (пл.01–16)
   if (iW > 0 && iH > 0) {
-    const innerX = pts.filter(p=>p.x>0&&p.x<wC&&p.y>0&&p.y<hC).map(p=>p.x-1);
-    const innerY = pts.filter(p=>p.x>0&&p.x<wC&&p.y>0&&p.y<hC).map(p=>p.y-1);
+    const innerPts = pts.filter(p=>p.x>0&&p.x<wC&&p.y>0&&p.y<hC);
+    const innerX = innerPts.map(p=>p.x-1);
+    const innerY = innerPts.map(p=>p.y-1);
+    // Exact cells only — a mount column crossing a mount row is not a mount by itself
+    const innerSet = new Set(innerPts.map(p=>`${p.x-1},${p.y-1}`));
     const colSegs = segsWithMountCells(iW, innerX, MAX);
     const rowSegs = segsWithMountCells(iH, innerY, MAX);
     for (const rs of rowSegs) for (const cs of colSegs) {
-      const isMount = innerX.includes(cs.start) && cs.size===1 &&
-                      innerY.includes(rs.start) && rs.size===1;
+      const isMount = cs.size===1 && rs.size===1 && innerSet.has(`${cs.start},${rs.start}`);
       mods.push({x:1+cs.start, y:1+rs.start, wC:cs.size, hC:rs.size,
         role: isMount ? 'mount' : 'std', mountKey: isMount ? 'mid' : null});
     }
@@ -873,7 +899,7 @@ function renderBOM(b, lay) {
   document.getElementById('bom').innerHTML = h;
 }
 
-function renderExclusions(xPts, yPts, D) {
+function renderExclusions(pts, D) {
   const list = document.getElementById('exclList');
   const warn = document.getElementById('exclWarn');
   const clr  = document.getElementById('exclClear');
@@ -882,7 +908,8 @@ function renderExclusions(xPts, yPts, D) {
   const xs = [...EXCL.x].sort((a,b)=>a-b);
   const ys = [...EXCL.y].sort((a,b)=>a-b);
   const ps = [...EXCL.p].sort();
-  const has = xs.length || ys.length || ps.length;
+  const as = [...ADD].sort();
+  const has = xs.length || ys.length || ps.length || as.length;
   clr.style.display = has ? 'inline-block' : 'none';
 
   if (!has) {
@@ -892,6 +919,14 @@ function renderExclusions(xPts, yPts, D) {
       `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg);border:1px solid var(--b2);border-radius:3px;padding:2px 5px 2px 7px;margin:2px 3px 2px 0;color:var(--acc2);cursor:pointer" onclick="${onClick}" title="remove">${label}<span style="color:var(--t3);font-weight:600">×</span></span>`;
     const sect = title => `<div style="font-family:var(--sans);font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-top:6px">${title}</div><div>`;
     let h = '';
+    if (as.length) {
+      h += sect(t('exclAdded'));
+      for (const k of as) {
+        const [px,py] = k.split(',').map(Number);
+        h += chip(`${px*S},${py*S}`, `removeAdd('${k}')`);
+      }
+      h += `</div>`;
+    }
     if (xs.length) {
       h += sect(t('exclCols'));
       for (const x of xs) h += chip(`${x*S}mm`, `removeExclX(${x})`);
@@ -913,10 +948,10 @@ function renderExclusions(xPts, yPts, D) {
     list.innerHTML = h;
   }
 
-  // Sag check: largest gap between consecutive remaining mount X / Y positions
-  // (column/row exclusions only — point exclusions don't shrink the line span)
-  const remX = xPts.filter(v => !EXCL.x.has(v));
-  const remY = yPts.filter(v => !EXCL.y.has(v));
+  // Sag check: largest gap between consecutive mount X / Y positions that still
+  // hold at least one active point (incl. user-placed ones)
+  const remX = [...new Set(pts.map(p => p.x))].sort((a,b)=>a-b);
+  const remY = [...new Set(pts.map(p => p.y))].sort((a,b)=>a-b);
   let gapX = 0, gapY = 0;
   for (let i = 1; i < remX.length; i++) gapX = Math.max(gapX, remX[i] - remX[i-1]);
   for (let i = 1; i < remY.length; i++) gapY = Math.max(gapY, remY[i] - remY[i-1]);
@@ -1103,6 +1138,17 @@ function drawBoard(wC,hC,lay,pts){
     ctx.fillStyle=fc;ctx.strokeStyle=p.key==='corner'?P.cornerRing:P.midStroke;ctx.lineWidth=.8;
     diam(ctx,px,py,r);ctx.fill();diam(ctx,px,py,r);ctx.stroke();
     if(p.key==='corner'){ctx.fillStyle=DARK?'#fffef0':'#3a2800';ctx.beginPath();ctx.arc(px,py,1,0,Math.PI*2);ctx.fill();}
+    // User-placed points get an accent ring
+    if(p.custom){ctx.strokeStyle=P.connFill;ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(px,py,r+2.5,0,Math.PI*2);ctx.stroke();}
+  }
+
+  // Hover preview in manual mode
+  if (EXCL_MODE === 'man' && HOVER_PT) {
+    const px=MX+HOVER_PT.x*C, py=MY+HOVER_PT.y*C;
+    ctx.save();
+    ctx.strokeStyle=P.connFill; ctx.lineWidth=1.2; ctx.setLineDash([2,2]);
+    ctx.beginPath(); ctx.arc(px,py,DR+3,0,Math.PI*2); ctx.stroke();
+    ctx.restore();
   }
 
   // Ghost markers for excluded mount points (click again to re-enable)
@@ -1110,6 +1156,7 @@ function drawBoard(wC,hC,lay,pts){
     ctx.save();
     for (const x of G.xPts) for (const y of G.yPts) {
       if (!(EXCL.x.has(x) || EXCL.y.has(y) || EXCL.p.has(`${x},${y}`))) continue;
+      if (ADD.has(`${x},${y}`) || !mountKeyAt(x,y,wC,hC)) continue;
       const px=MX+x*C, py=MY+y*C;
       ctx.strokeStyle=DARK?'rgba(220,80,80,.55)':'rgba(180,30,30,.55)';
       ctx.lineWidth=1;
@@ -1136,6 +1183,14 @@ function drawBoard(wC,hC,lay,pts){
     const scaleY = cvs.height / dpr / rect.height;
     const mx = (e.clientX - rect.left) * scaleX;
     const my = (e.clientY - rect.top) * scaleY;
+    if (EXCL_MODE === 'man') {
+      const s = snapGrid(mx, my);
+      if ((s && s.x) !== (HOVER_PT && HOVER_PT.x) || (s && s.y) !== (HOVER_PT && HOVER_PT.y)) {
+        HOVER_PT = s;
+        redrawBoard();
+      }
+      return;
+    }
     let found = null;
     for (const m of mods) {
       const px=MX+m.x*C, py=MY+m.y*C, pw=m.wC*C, ph=m.hC*C;
@@ -1148,7 +1203,16 @@ function drawBoard(wC,hC,lay,pts){
     }
   };
   cvs.onmouseleave = () => {
+    if (HOVER_PT) { HOVER_PT=null; redrawBoard(); }
     if (HK) { HK=null; redrawBoard(); highlightBOMRow(null); }
+  };
+
+  // Nearest grid intersection that can hold a bracket, or null
+  const snapGrid = (mx, my) => {
+    const x = Math.round((mx-MX)/C), y = Math.round((my-MY)/C);
+    const d = Math.hypot(mx-(MX+x*C), my-(MY+y*C));
+    if (d > Math.max(12, C*.7) || !mountKeyAt(x, y, wC, hC)) return null;
+    return {x, y};
   };
 
   // Click → toggle exclusion based on EXCL_MODE
@@ -1160,10 +1224,30 @@ function drawBoard(wC,hC,lay,pts){
     const scaleY = cvs.height / dpr / rect.height;
     const mx = (e.clientX - rect.left) * scaleX;
     const my = (e.clientY - rect.top)  * scaleY;
+    if (EXCL_MODE === 'man') {
+      const s = snapGrid(mx, my);
+      if (!s) return;
+      e.preventDefault();
+      const k = `${s.x},${s.y}`;
+      const isAuto = G.xPts.includes(s.x) && G.yPts.includes(s.y);
+      if (G.pts.some(p => p.x===s.x && p.y===s.y)) {
+        // Active → remove (drop user point; exclude the auto point if one sits here)
+        ADD.delete(k);
+        if (isAuto) EXCL.p.add(k);
+      } else if (isAuto && EXCL.p.has(k) && !EXCL.x.has(s.x) && !EXCL.y.has(s.y)) {
+        EXCL.p.delete(k);
+      } else {
+        ADD.add(k);
+      }
+      saveExclusions();
+      go();
+      return;
+    }
     const HIT = Math.max(12, C*.7);
-    // Snap to the nearest LIVE mount point (in current pts) — avoids snapping to dead positions.
+    // Snap to the nearest LIVE auto mount point (in current pts) — avoids snapping to dead positions.
     let best=null, bestD=HIT*HIT;
     for (const p of G.pts) {
+      if (p.custom) continue;
       const px=MX+p.x*C, py=MY+p.y*C;
       const d=(mx-px)*(mx-px)+(my-py)*(my-py);
       if (d <= bestD) { bestD=d; best={x:p.x,y:p.y}; }
@@ -1426,7 +1510,7 @@ function go(){
 
   G = {wC,hC,lay,pts,bom:b,xPts:mp.xPts,yPts:mp.yPts};
 
-  renderExclusions(mp.xPts, mp.yPts, D);
+  renderExclusions(pts, D);
 
   drawBoard(wC,hC,lay,pts);
   renderBOM(b, lay);
